@@ -179,7 +179,9 @@ button:active { opacity: .7; }
   PROJECT VISION · VERSION 0.1
 </div>
 
+
 <script>
+const WORKER_URL = "https://vision-brain.st1868651.workers.dev/";
 
 const chat = document.getElementById("chat");
 const input = document.getElementById("message");
@@ -193,21 +195,17 @@ let history = JSON.parse(
 );
 
 let lastResponse = "";
+let isThinking = false;
 
 function saveData() {
-  localStorage.setItem(
-    "vision_memories", JSON.stringify(memories)
-  );
-
-  localStorage.setItem(
-    "vision_history", JSON.stringify(history)
-  );
+  localStorage.setItem("vision_memories", JSON.stringify(memories));
+  localStorage.setItem("vision_history", JSON.stringify(history));
 }
 
 function updateMemories() {
   document.getElementById("memories").textContent =
     memories.length
-      ? memories.map((m, i) => `${i+1}. ${m}`).join("\n")
+      ? memories.map((m, i) => `${i + 1}. ${m}`).join("\n")
       : "No memories stored yet.";
 }
 
@@ -234,6 +232,7 @@ function respond(text) {
 
   if ("speechSynthesis" in window) {
     speechSynthesis.cancel();
+
     const speech = new SpeechSynthesisUtterance(text);
     speech.lang = "en-IN";
     speech.rate = 0.95;
@@ -241,17 +240,69 @@ function respond(text) {
   }
 }
 
-function send() {
+async function askVisionAI(text) {
+  // Include saved memories and recent conversation as context.
+  // This context is sent to your Cloudflare Worker.
+  const recentHistory = history.slice(-8).map(item => ({
+    role: item.role,
+    text: item.text
+  }));
+
+  const context = `
+You are VISION, my personal AI assistant.
+
+Saved memories:
+${memories.length ? memories.map(m => "- " + m).join("\n") : "None"}
+
+Recent conversation:
+${recentHistory.map(item =>
+  (item.role === "user" ? "User: " : "VISION: ") + item.text
+).join("\n")}
+
+Current user message:
+${text}
+
+Respond naturally and helpfully. Use relevant saved memories when useful.
+`;
+
+  const response = await fetch(WORKER_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      message: context
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error("Worker returned status " + response.status);
+  }
+
+  const data = await response.json();
+
+  if (!data.reply) {
+    throw new Error(data.error || "No AI response received.");
+  }
+
+  return data.reply;
+}
+
+async function send() {
   const text = input.value.trim();
-  if (!text) return;
+
+  if (!text || isThinking) return;
 
   addMessage("user", text);
+
   history.push({ role: "user", text });
   saveData();
+
   input.value = "";
 
   const lower = text.toLowerCase();
 
+  // Local memory command
   if (lower.startsWith("remember:")) {
     const memory = text.substring(9).trim();
 
@@ -259,35 +310,54 @@ function send() {
       memories.push(memory);
       saveData();
       updateMemories();
+
       respond("Memory saved successfully. I can retrieve it later on this device.");
     } else {
       respond("Please tell me what you want me to remember.");
     }
 
-  } else if (lower.includes("what do you remember")) {
+    return;
+  }
 
-    respond(memories.length
-      ? "Here is what I remember:\n" +
-        memories.map((m, i) => `${i+1}. ${m}`).join("\n")
-      : "I don't have any saved memories yet.");
+  // Retrieve local memories
+  if (lower.includes("what do you remember")) {
+    respond(
+      memories.length
+        ? "Here is what I remember:\n" +
+          memories.map((m, i) => `${i + 1}. ${m}`).join("\n")
+        : "I don't have any saved memories yet."
+    );
 
-  } else if (lower.includes("what time is it")) {
+    return;
+  }
 
-    respond("The current time on your device is " +
-      new Date().toLocaleTimeString());
+  // Local time command
+  if (lower.includes("what time is it")) {
+    respond(
+      "The current time on your device is " +
+      new Date().toLocaleTimeString()
+    );
 
-  } else if (lower.includes("hello") ||
-             lower.includes("hi vision")) {
+    return;
+  }
 
-    respond("Hello. I'm ready to assist you.");
+  // Connect all other messages to real AI
+  isThinking = true;
+  input.disabled = true;
 
-  } else if (lower.includes("help")) {
+  try {
+    const answer = await askVisionAI(text);
+    respond(answer);
+  } catch (error) {
+    console.error("Vision AI error:", error);
 
-    respond("I can save personal memories, retrieve saved information and speak responses. My advanced AI brain is not connected yet.");
-
-  } else {
-
-    respond("I received your message. My AI reasoning engine is not connected yet. For now, try the memory commands or ask me what I remember.");
+    respond(
+      "I'm having trouble connecting to my AI brain right now. Please check your internet connection and try again."
+    );
+  } finally {
+    isThinking = false;
+    input.disabled = false;
+    input.focus();
   }
 }
 
@@ -311,12 +381,13 @@ input.addEventListener("keydown", function(e) {
   if (e.key === "Enter") send();
 });
 
+// Restore previous conversation
 history.forEach(item => {
   addMessage(item.role === "user" ? "user" : "ai", item.text);
 });
 
 updateMemories();
-
 </script>
+
 </body>
 </html>
