@@ -1,0 +1,322 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#090d18">
+<title>PROJECT VISION</title>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: #090d18;
+  color: #eaf2ff;
+  font-family: -apple-system, sans-serif;
+}
+
+header {
+  text-align: center;
+  padding: 28px 12px 10px;
+}
+
+h1 {
+  color: #82b9ff;
+  letter-spacing: 5px;
+  font-size: 25px;
+}
+
+.status {
+  color: #7e91ad;
+  font-size: 11px;
+  letter-spacing: 3px;
+}
+
+.orb {
+  width: 125px;
+  height: 125px;
+  margin: 24px auto;
+  border-radius: 50%;
+  background: radial-gradient(circle, #8bc5ff, #24528d 48%, #101b35 72%);
+  box-shadow: 0 0 35px #347bd866;
+}
+
+main {
+  max-width: 650px;
+  margin: auto;
+  padding: 12px;
+}
+
+#chat {
+  height: 42vh;
+  overflow-y: auto;
+  background: #111a2b;
+  border: 1px solid #273751;
+  border-radius: 15px;
+  padding: 15px;
+}
+
+.msg {
+  padding: 11px;
+  margin: 9px 0;
+  border-radius: 10px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.user { background: #203858; }
+.ai { background: #192438; }
+
+small {
+  color: #83b9ff;
+  display: block;
+  margin-bottom: 5px;
+}
+
+.controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+input {
+  min-width: 0;
+  flex: 1;
+  background: #172238;
+  color: white;
+  border: 1px solid #344766;
+  border-radius: 10px;
+  padding: 14px;
+  font-size: 16px;
+}
+
+button {
+  background: #315b91;
+  color: white;
+  border: 0;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 14px;
+}
+
+button:active { opacity: .7; }
+
+.panel {
+  background: #111a2b;
+  border: 1px solid #273751;
+  padding: 14px;
+  margin-top: 14px;
+  border-radius: 13px;
+}
+
+.panel h3 { color: #82b9ff; }
+
+#memories {
+  color: #a9bbd4;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.footer {
+  text-align: center;
+  color: #61748e;
+  padding: 20px;
+  font-size: 11px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>PROJECT VISION</h1>
+  <div class="status">PERSONAL INTELLIGENCE SYSTEM</div>
+  <div class="orb"></div>
+  <div class="status" id="status">SYSTEM ONLINE</div>
+</header>
+
+<main>
+
+  <div id="chat">
+    <div class="msg ai">
+      <small>VISION</small>
+      Hello. I am Vision.
+
+      Your personal assistant interface is online.
+      How can I help you today?
+    </div>
+  </div>
+
+  <div class="controls">
+    <input id="message"
+      placeholder="Talk to Vision..."
+      autocomplete="off">
+    <button onclick="send()">SEND</button>
+  </div>
+
+  <div class="panel">
+    <h3>PERSONAL MEMORY</h3>
+    <div id="memories">No memories stored yet.</div>
+    <button onclick="clearMemory()">Clear memory</button>
+  </div>
+
+  <div class="panel">
+    <h3>SYSTEM COMMANDS</h3>
+    <p>Remember: your information</p>
+    <p>What do you remember?</p>
+    <p>What time is it?</p>
+    <button onclick="speakLast()">Repeat last response</button>
+  </div>
+
+</main>
+
+<div class="footer">
+  PROJECT VISION · VERSION 0.1
+</div>
+
+<script>
+
+const chat = document.getElementById("chat");
+const input = document.getElementById("message");
+
+let memories = JSON.parse(
+  localStorage.getItem("vision_memories") || "[]"
+);
+
+let history = JSON.parse(
+  localStorage.getItem("vision_history") || "[]"
+);
+
+let lastResponse = "";
+
+function saveData() {
+  localStorage.setItem(
+    "vision_memories", JSON.stringify(memories)
+  );
+
+  localStorage.setItem(
+    "vision_history", JSON.stringify(history)
+  );
+}
+
+function updateMemories() {
+  document.getElementById("memories").textContent =
+    memories.length
+      ? memories.map((m, i) => `${i+1}. ${m}`).join("\n")
+      : "No memories stored yet.";
+}
+
+function addMessage(sender, text) {
+  const div = document.createElement("div");
+  div.className = "msg " + sender;
+
+  const label = document.createElement("small");
+  label.textContent = sender === "user" ? "YOU" : "VISION";
+
+  div.appendChild(label);
+  div.appendChild(document.createTextNode(text));
+
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function respond(text) {
+  lastResponse = text;
+  addMessage("ai", text);
+
+  history.push({ role: "assistant", text });
+  saveData();
+
+  if ("speechSynthesis" in window) {
+    speechSynthesis.cancel();
+    const speech = new SpeechSynthesisUtterance(text);
+    speech.lang = "en-IN";
+    speech.rate = 0.95;
+    speechSynthesis.speak(speech);
+  }
+}
+
+function send() {
+  const text = input.value.trim();
+  if (!text) return;
+
+  addMessage("user", text);
+  history.push({ role: "user", text });
+  saveData();
+  input.value = "";
+
+  const lower = text.toLowerCase();
+
+  if (lower.startsWith("remember:")) {
+    const memory = text.substring(9).trim();
+
+    if (memory) {
+      memories.push(memory);
+      saveData();
+      updateMemories();
+      respond("Memory saved successfully. I can retrieve it later on this device.");
+    } else {
+      respond("Please tell me what you want me to remember.");
+    }
+
+  } else if (lower.includes("what do you remember")) {
+
+    respond(memories.length
+      ? "Here is what I remember:\n" +
+        memories.map((m, i) => `${i+1}. ${m}`).join("\n")
+      : "I don't have any saved memories yet.");
+
+  } else if (lower.includes("what time is it")) {
+
+    respond("The current time on your device is " +
+      new Date().toLocaleTimeString());
+
+  } else if (lower.includes("hello") ||
+             lower.includes("hi vision")) {
+
+    respond("Hello. I'm ready to assist you.");
+
+  } else if (lower.includes("help")) {
+
+    respond("I can save personal memories, retrieve saved information and speak responses. My advanced AI brain is not connected yet.");
+
+  } else {
+
+    respond("I received your message. My AI reasoning engine is not connected yet. For now, try the memory commands or ask me what I remember.");
+  }
+}
+
+function speakLast() {
+  if (lastResponse && "speechSynthesis" in window) {
+    const speech = new SpeechSynthesisUtterance(lastResponse);
+    speech.lang = "en-IN";
+    speechSynthesis.speak(speech);
+  }
+}
+
+function clearMemory() {
+  if (confirm("Delete all saved Vision memories?")) {
+    memories = [];
+    saveData();
+    updateMemories();
+  }
+}
+
+input.addEventListener("keydown", function(e) {
+  if (e.key === "Enter") send();
+});
+
+history.forEach(item => {
+  addMessage(item.role === "user" ? "user" : "ai", item.text);
+});
+
+updateMemories();
+
+</script>
+</body>
+</html>
